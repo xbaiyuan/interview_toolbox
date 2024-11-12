@@ -12,7 +12,7 @@ class AmazonInterviewPrep:
     def __init__(self, root):
         self.root = root
         self.root.title("Amazon Interview Preparation Tool")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x1000")
 
         # Full list of Amazon Leadership Principles
         self.leadership_principles = [
@@ -149,7 +149,7 @@ class AmazonInterviewPrep:
         # Create a new window for question editing
         self.question_editor_window = tk.Toplevel(self.root)
         self.question_editor_window.title("Question Editor")
-        self.question_editor_window.geometry("800x700")
+        self.question_editor_window.geometry("800x1000")
 
         ttk.Label(self.question_editor_window, text="Question Details", font=('Helvetica', 14)).pack(pady=10)
 
@@ -441,7 +441,7 @@ class AmazonInterviewPrep:
         # Open a new window to edit the story
         self.lp_story_window = tk.Toplevel(self.root)
         self.lp_story_window.title(f"Edit Story - {exp_title} - {lp}")
-        self.lp_story_window.geometry("800x600")
+        self.lp_story_window.geometry("800x1000")
 
         ttk.Label(self.lp_story_window, text=f"Experience: {exp_title}", font=('Helvetica', 14)).pack(pady=5)
         ttk.Label(self.lp_story_window, text=f"Leadership Principle: {lp}", font=('Helvetica', 14)).pack(pady=5)
