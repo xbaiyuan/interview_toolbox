@@ -152,14 +152,11 @@ class LPMatrixGUI:
 
         ttk.Label(practice_frame, text="Practice with Recording", font=("Helvetica", 16)).pack(pady=10)
 
-        # LP selection
-        ttk.Label(practice_frame, text="Select Leadership Principle (or leave blank for random):").pack(anchor='w')
-        self.practice_lp_var = tk.StringVar()
-        self.practice_lp_combo = ttk.Combobox(practice_frame, textvariable=self.practice_lp_var, values=[''] + self.leadership_principles)
-        self.practice_lp_combo.pack(fill='x', pady=5)
+        # LP selection buttons
+        self.lp_button_frame = ttk.Frame(practice_frame)
+        self.lp_button_frame.pack(fill='x', pady=5)
 
-        # Start Practice Button
-        ttk.Button(practice_frame, text="Start Practice", command=self.start_practice).pack(pady=10)
+        self.create_lp_buttons(self.lp_button_frame)
 
         # Flashcard Display
         self.flashcard_label = ttk.Label(practice_frame, text="", wraplength=800, font=("Helvetica", 14), justify='center')
@@ -169,7 +166,7 @@ class LPMatrixGUI:
         control_frame = ttk.Frame(practice_frame)
         control_frame.pack(pady=10)
 
-        self.record_button = ttk.Button(control_frame, text="Start Recording", command=self.start_recording)
+        self.record_button = ttk.Button(control_frame, text="Start Recording", command=self.start_recording, state='disabled')
         self.record_button.pack(side='left', padx=5)
 
         self.stop_button = ttk.Button(control_frame, text="Stop Recording", command=self.stop_recording, state='disabled')
@@ -193,9 +190,32 @@ class LPMatrixGUI:
         self.record_frames = []
         self.audio_filename = "recording.wav"
 
-    def start_practice(self):
-        lp = self.practice_lp_var.get()
-        if lp == '':
+    def create_lp_buttons(self, parent):
+        # Create a canvas for scrollable buttons
+        canvas = tk.Canvas(parent)
+        scrollbar = ttk.Scrollbar(parent, orient='horizontal', command=canvas.xview)
+        self.lp_buttons_frame = ttk.Frame(canvas)
+
+        self.lp_buttons_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=self.lp_buttons_frame, anchor='nw')
+        canvas.configure(xscrollcommand=scrollbar.set)
+
+        canvas.pack(side='top', fill='x', expand=True)
+        scrollbar.pack(side='bottom', fill='x')
+
+        # Create buttons for each leadership principle
+        for lp in self.leadership_principles:
+            button = ttk.Button(self.lp_buttons_frame, text=lp, command=lambda lp=lp: self.start_practice(lp))
+            button.pack(side='left', padx=5, pady=5)
+
+    def start_practice(self, lp=None):
+        if lp is None:
             lp = random.choice(self.leadership_principles)
         flashcards = self.lp_questions.get(lp, [])
         if not flashcards:
