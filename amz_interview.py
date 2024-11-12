@@ -8,7 +8,7 @@ import pyaudio
 import wave
 import datetime
 
-class LPMatrixGUI:
+class AmazonInterviewPrep:
     def __init__(self, root):
         self.root = root
         self.root.title("Amazon Interview Preparation Tool")
@@ -35,12 +35,17 @@ class LPMatrixGUI:
         ]
 
         # Initialize data structures
-        self.experiences = self.load_experiences()
-        self.common_questions = self.load_common_questions()
-        self.matrix_data = self.load_matrix_data()
-        self.lp_questions = self.load_lp_questions()
-        self.practice_history = self.load_practice_history()
-        self.interview_framework = self.load_interview_framework()
+        self.experiences = []
+        self.questions = []
+        self.practice_history = {}
+        self.lp_matrix_data = {}
+        self.interview_framework = {}
+
+        self.load_experiences()
+        self.load_questions()
+        self.load_practice_history()
+        self.load_lp_matrix_data()
+        self.load_interview_framework()
 
         self.create_gui()
 
@@ -48,21 +53,21 @@ class LPMatrixGUI:
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.root)
 
+        # Question Bank Tab
+        self.question_bank_frame = ttk.Frame(self.notebook)
+        self.create_question_bank(self.question_bank_frame)
+
         # Experience Library Tab
         self.experience_frame = ttk.Frame(self.notebook)
         self.create_experience_library(self.experience_frame)
 
-        # Common Questions Tab
-        self.common_questions_frame = ttk.Frame(self.notebook)
-        self.create_common_questions(self.common_questions_frame)
-
         # LP Story Matrix Tab
-        self.matrix_frame = ttk.Frame(self.notebook)
-        self.create_matrix_view(self.matrix_frame)
+        self.lp_matrix_frame = ttk.Frame(self.notebook)
+        self.create_lp_matrix(self.lp_matrix_frame)
 
         # Interview Framework Tab
-        self.framework_frame = ttk.Frame(self.notebook)
-        self.create_interview_framework(self.framework_frame)
+        self.interview_framework_frame = ttk.Frame(self.notebook)
+        self.create_interview_framework(self.interview_framework_frame)
 
         # Practice Tab
         self.practice_frame = ttk.Frame(self.notebook)
@@ -73,14 +78,188 @@ class LPMatrixGUI:
         self.create_progress_tracking(self.progress_frame)
 
         # Add tabs to notebook
+        self.notebook.add(self.question_bank_frame, text="Question Bank")
         self.notebook.add(self.experience_frame, text="Experience Library")
-        self.notebook.add(self.common_questions_frame, text="Common Questions")
-        self.notebook.add(self.matrix_frame, text="LP Story Matrix")
-        self.notebook.add(self.framework_frame, text="Interview Framework")
+        self.notebook.add(self.lp_matrix_frame, text="LP Story Matrix")
+        self.notebook.add(self.interview_framework_frame, text="Interview Framework")
         self.notebook.add(self.practice_frame, text="Practice")
         self.notebook.add(self.progress_frame, text="Progress Tracking")
 
         self.notebook.pack(expand=True, fill='both', padx=5, pady=5)
+
+    # ----------------------- Question Bank -----------------------
+    def create_question_bank(self, parent):
+        main_frame = ttk.Frame(parent)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Question List
+        ttk.Label(main_frame, text="Question Bank", font=('Helvetica', 16)).pack(pady=10)
+
+        self.question_tree = ttk.Treeview(main_frame, columns=('Question', 'LPs'), show='headings')
+        self.question_tree.heading('Question', text='Question')
+        self.question_tree.heading('LPs', text='Leadership Principles')
+        self.question_tree.pack(fill='both', expand=True)
+        self.question_tree.bind('<<TreeviewSelect>>', self.on_question_select)
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=5)
+        ttk.Button(button_frame, text="Add Question", command=self.add_question).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Edit Question", command=self.edit_question).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Delete Question", command=self.delete_question).pack(side='left', padx=5)
+
+        # Load questions
+        self.update_question_tree()
+
+    def update_question_tree(self):
+        for item in self.question_tree.get_children():
+            self.question_tree.delete(item)
+        for idx, question in enumerate(self.questions):
+            lp_str = ", ".join(question.get('leadership_principles', []))
+            self.question_tree.insert('', 'end', iid=idx, values=(question['question'], lp_str))
+
+    def on_question_select(self, event):
+        selected = self.question_tree.focus()
+        if selected:
+            self.current_question_index = int(selected)
+
+    def add_question(self):
+        self.open_question_editor()
+
+    def edit_question(self):
+        selected = self.question_tree.focus()
+        if selected:
+            idx = int(selected)
+            question = self.questions[idx]
+            self.open_question_editor(question, idx)
+        else:
+            messagebox.showerror("Error", "Please select a question to edit.")
+
+    def delete_question(self):
+        selected = self.question_tree.focus()
+        if selected:
+            idx = int(selected)
+            del self.questions[idx]
+            self.save_questions()
+            self.update_question_tree()
+        else:
+            messagebox.showerror("Error", "Please select a question to delete.")
+
+    def open_question_editor(self, question=None, idx=None):
+        # Create a new window for question editing
+        self.question_editor_window = tk.Toplevel(self.root)
+        self.question_editor_window.title("Question Editor")
+        self.question_editor_window.geometry("800x700")
+
+        ttk.Label(self.question_editor_window, text="Question Details", font=('Helvetica', 14)).pack(pady=10)
+
+        # Question
+        ttk.Label(self.question_editor_window, text="Question:").pack(anchor='nw', padx=10)
+        self.question_var = tk.StringVar()
+        self.question_entry = ttk.Entry(self.question_editor_window, textvariable=self.question_var, width=100)
+        self.question_entry.pack(fill='x', padx=10, pady=5)
+
+        # Answer
+        ttk.Label(self.question_editor_window, text="Answer:").pack(anchor='nw', padx=10)
+        self.answer_text = scrolledtext.ScrolledText(self.question_editor_window, height=8)
+        self.answer_text.pack(fill='both', expand=True, padx=10, pady=5)
+
+        # Key Points
+        ttk.Label(self.question_editor_window, text="Key Points:").pack(anchor='nw', padx=10)
+        self.keypoints_text = scrolledtext.ScrolledText(self.question_editor_window, height=5)
+        self.keypoints_text.pack(fill='both', expand=True, padx=10, pady=5)
+
+        # Associated Experiences
+        ttk.Label(self.question_editor_window, text="Associated Experiences:").pack(anchor='nw', padx=10)
+        self.experience_vars = {}
+        exp_frame = ttk.Frame(self.question_editor_window)
+        exp_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        for exp in self.experiences:
+            var = tk.BooleanVar()
+            cb = ttk.Checkbutton(exp_frame, text=exp['title'], variable=var)
+            cb.pack(anchor='w')
+            self.experience_vars[exp['title']] = var
+
+        # Leadership Principles
+        ttk.Label(self.question_editor_window, text="Leadership Principles:").pack(anchor='nw', padx=10)
+        self.lp_vars = {}
+        lp_frame = ttk.Frame(self.question_editor_window)
+        lp_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        for lp in self.leadership_principles:
+            var = tk.BooleanVar()
+            cb = ttk.Checkbutton(lp_frame, text=lp, variable=var)
+            cb.pack(anchor='w')
+            self.lp_vars[lp] = var
+
+        # Buttons
+        button_frame = ttk.Frame(self.question_editor_window)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="Save", command=lambda: self.save_question(idx)).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.question_editor_window.destroy).pack(side='left', padx=5)
+
+        # Load question data if editing
+        if question:
+            self.question_var.set(question['question'])
+            self.answer_text.insert('1.0', question.get('answer', ''))
+            self.keypoints_text.insert('1.0', '\n'.join(question.get('key_points', [])))
+            for exp_title in question.get('experiences', []):
+                if exp_title in self.experience_vars:
+                    self.experience_vars[exp_title].set(True)
+            for lp in question.get('leadership_principles', []):
+                if lp in self.lp_vars:
+                    self.lp_vars[lp].set(True)
+        else:
+            # Clear fields for new question
+            self.question_var.set("")
+            self.answer_text.delete('1.0', tk.END)
+            self.keypoints_text.delete('1.0', tk.END)
+            for var in self.experience_vars.values():
+                var.set(False)
+            for var in self.lp_vars.values():
+                var.set(False)
+
+    def save_question(self, idx=None):
+        question_text = self.question_var.get().strip()
+        answer_text = self.answer_text.get('1.0', tk.END).strip()
+        key_points = [kp.strip() for kp in self.keypoints_text.get('1.0', tk.END).strip().split('\n') if kp.strip()]
+        experiences = [title for title, var in self.experience_vars.items() if var.get()]
+        leadership_principles = [lp for lp, var in self.lp_vars.items() if var.get()]
+
+        if not question_text:
+            messagebox.showerror("Error", "Please enter a question.")
+            return
+
+        question_data = {
+            'question': question_text,
+            'answer': answer_text,
+            'key_points': key_points,
+            'experiences': experiences,
+            'leadership_principles': leadership_principles
+        }
+
+        if idx is not None:
+            self.questions[idx] = question_data
+        else:
+            self.questions.append(question_data)
+
+        self.save_questions()
+        self.update_question_tree()
+        self.question_editor_window.destroy()
+
+    def load_questions(self):
+        try:
+            if os.path.exists("questions.json"):
+                with open("questions.json", "r", encoding='utf-8') as f:
+                    self.questions = json.load(f)
+            else:
+                self.questions = []
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load questions: {str(e)}")
+            self.questions = []
+
+    def save_questions(self):
+        with open("questions.json", "w", encoding='utf-8') as f:
+            json.dump(self.questions, f, ensure_ascii=False, indent=2)
 
     # ----------------------- Experience Library -----------------------
     def create_experience_library(self, parent):
@@ -113,24 +292,12 @@ class LPMatrixGUI:
         self.exp_title_entry.grid(row=1, column=1, sticky='ew', pady=2)
 
         ttk.Label(exp_details_frame, text="Description:").grid(row=2, column=0, sticky='nw')
-        self.exp_desc_text = scrolledtext.ScrolledText(exp_details_frame, height=10)
+        self.exp_desc_text = scrolledtext.ScrolledText(exp_details_frame, height=15)
         self.exp_desc_text.grid(row=2, column=1, sticky='nsew', pady=2)
-
-        ttk.Label(exp_details_frame, text="Leadership Principles:").grid(row=3, column=0, sticky='nw')
-        self.exp_lp_frame = ttk.Frame(exp_details_frame)
-        self.exp_lp_frame.grid(row=3, column=1, sticky='nw')
-
-        # LP Checkboxes
-        self.exp_lp_vars = {}
-        for lp in self.leadership_principles:
-            var = tk.BooleanVar()
-            cb = ttk.Checkbutton(self.exp_lp_frame, text=lp, variable=var)
-            cb.pack(anchor='w')
-            self.exp_lp_vars[lp] = var
 
         # Buttons
         button_frame = ttk.Frame(exp_details_frame)
-        button_frame.grid(row=4, column=1, sticky='e', pady=5)
+        button_frame.grid(row=3, column=1, sticky='e', pady=5)
 
         ttk.Button(button_frame, text="Save Experience", command=self.save_experience).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Delete Experience", command=self.delete_experience).pack(side="left", padx=5)
@@ -147,21 +314,20 @@ class LPMatrixGUI:
     def on_experience_select(self, event):
         selection = event.widget.curselection()
         if selection:
-            index = selection[0]
-            experience = self.experiences[index]
+            self.current_exp_index = selection[0]
+            experience = self.experiences[self.current_exp_index]
             self.load_experience_details(experience)
+        else:
+            self.clear_experience_form()
 
     def load_experience_details(self, experience):
         self.exp_title_var.set(experience['title'])
         self.exp_desc_text.delete('1.0', tk.END)
         self.exp_desc_text.insert('1.0', experience['description'])
-        for lp in self.leadership_principles:
-            self.exp_lp_vars[lp].set(lp in experience['leadership_principles'])
 
     def save_experience(self):
         title = self.exp_title_var.get().strip()
         description = self.exp_desc_text.get('1.0', tk.END).strip()
-        leadership_principles = [lp for lp in self.leadership_principles if self.exp_lp_vars[lp].get()]
 
         if not title:
             messagebox.showerror("Error", "Please enter a title for the experience.")
@@ -169,8 +335,7 @@ class LPMatrixGUI:
 
         experience = {
             'title': title,
-            'description': description,
-            'leadership_principles': leadership_principles
+            'description': description
         }
 
         # Check if updating existing experience
@@ -200,262 +365,128 @@ class LPMatrixGUI:
     def clear_experience_form(self):
         self.exp_title_var.set("")
         self.exp_desc_text.delete('1.0', tk.END)
-        for var in self.exp_lp_vars.values():
-            var.set(False)
 
     def load_experiences(self):
         try:
             if os.path.exists("experiences.json"):
                 with open("experiences.json", "r", encoding='utf-8') as f:
-                    return json.load(f)
+                    self.experiences = json.load(f)
+                # Ensure experiences are a list
+                if not isinstance(self.experiences, list):
+                    self.experiences = []
             else:
-                return []
+                self.experiences = []
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load experiences: {str(e)}")
-            return []
+            self.experiences = []
 
     def save_experiences(self):
         with open("experiences.json", "w", encoding='utf-8') as f:
             json.dump(self.experiences, f, ensure_ascii=False, indent=2)
 
-    # ----------------------- Common Questions -----------------------
-    def create_common_questions(self, parent):
+    # ----------------------- LP Story Matrix -----------------------
+    def create_lp_matrix(self, parent):
         main_frame = ttk.Frame(parent)
         main_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
-        # Questions List
-        question_list_frame = ttk.Frame(main_frame)
-        question_list_frame.pack(side='left', fill='y')
+        ttk.Label(main_frame, text="LP Story Matrix", font=('Helvetica', 16)).pack(pady=10)
 
-        ttk.Label(question_list_frame, text="Common Questions", font=('Helvetica', 14)).pack(pady=5)
-
-        self.question_listbox = tk.Listbox(question_list_frame)
-        self.question_listbox.pack(fill='y', expand=True)
-        self.question_listbox.bind('<<ListboxSelect>>', self.on_question_select)
-
-        # Add questions to listbox
-        self.update_question_listbox()
-
-        # Question Details
-        question_details_frame = ttk.Frame(main_frame)
-        question_details_frame.pack(side='right', fill='both', expand=True)
-
-        ttk.Label(question_details_frame, text="Question Details", font=('Helvetica', 14)).grid(row=0, column=0, columnspan=2, pady=5)
-
-        ttk.Label(question_details_frame, text="Question:").grid(row=1, column=0, sticky='nw')
-        self.question_text = scrolledtext.ScrolledText(question_details_frame, height=5)
-        self.question_text.grid(row=1, column=1, sticky='nsew', pady=2)
-
-        ttk.Label(question_details_frame, text="Your Answer:").grid(row=2, column=0, sticky='nw')
-        self.answer_text = scrolledtext.ScrolledText(question_details_frame, height=10)
-        self.answer_text.grid(row=2, column=1, sticky='nsew', pady=2)
-
-        # Buttons
-        button_frame = ttk.Frame(question_details_frame)
-        button_frame.grid(row=3, column=1, sticky='e', pady=5)
-
-        ttk.Button(button_frame, text="Save Answer", command=self.save_answer).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Clear", command=self.clear_answer_form).pack(side="left", padx=5)
-
-        question_details_frame.columnconfigure(1, weight=1)
-        question_details_frame.rowconfigure(2, weight=1)
-
-    def update_question_listbox(self):
-        self.question_listbox.delete(0, tk.END)
-        for q in self.common_questions:
-            self.question_listbox.insert(tk.END, q['question'])
-
-    def on_question_select(self, event):
-        selection = event.widget.curselection()
-        if selection:
-            index = selection[0]
-            question = self.common_questions[index]
-            self.load_question_details(question)
-
-    def load_question_details(self, question):
-        self.question_text.delete('1.0', tk.END)
-        self.question_text.insert('1.0', question['question'])
-        self.answer_text.delete('1.0', tk.END)
-        self.answer_text.insert('1.0', question.get('answer', ''))
-
-    def save_answer(self):
-        question_text = self.question_text.get('1.0', tk.END).strip()
-        answer_text = self.answer_text.get('1.0', tk.END).strip()
-
-        if not question_text:
-            messagebox.showerror("Error", "Please select or enter a question.")
-            return
-
-        # Check if updating existing question
-        for idx, q in enumerate(self.common_questions):
-            if q['question'] == question_text:
-                self.common_questions[idx]['answer'] = answer_text
-                break
-        else:
-            self.common_questions.append({'question': question_text, 'answer': answer_text})
-
-        self.save_common_questions()
-        self.update_question_listbox()
-        messagebox.showinfo("Success", "Answer saved successfully!")
-
-    def clear_answer_form(self):
-        self.question_text.delete('1.0', tk.END)
-        self.answer_text.delete('1.0', tk.END)
-
-    def load_common_questions(self):
-        try:
-            if os.path.exists("common_questions.json"):
-                with open("common_questions.json", "r", encoding='utf-8') as f:
-                    return json.load(f)
-            else:
-                # Default common questions
-                return [
-                    {'question': 'Tell me about yourself.', 'answer': ''},
-                    {'question': 'Why do you want to work at Amazon?', 'answer': ''},
-                    {'question': 'Why are you interested in this role?', 'answer': ''}
-                ]
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load common questions: {str(e)}")
-            return []
-
-    def save_common_questions(self):
-        with open("common_questions.json", "w", encoding='utf-8') as f:
-            json.dump(self.common_questions, f, ensure_ascii=False, indent=2)
-
-    # ----------------------- LP Story Matrix -----------------------
-    def create_matrix_view(self, parent):
         # Create matrix table
-        self.matrix_tree = ttk.Treeview(parent, columns=['Experience'] + self.leadership_principles)
+        columns = ['Experience'] + self.leadership_principles
+        self.matrix_tree = ttk.Treeview(main_frame, columns=columns, show='headings')
 
-        # Configure columns
-        self.matrix_tree.heading('#0', text='')
-        self.matrix_tree.column('#0', width=0, stretch=tk.NO)
+        for col in columns:
+            self.matrix_tree.heading(col, text=col)
+            self.matrix_tree.column(col, width=100, anchor='center')
 
-        self.matrix_tree.heading('Experience', text='Experience')
-        self.matrix_tree.column('Experience', width=150, stretch=tk.NO)
+        self.matrix_tree.pack(fill='both', expand=True)
 
-        for lp in self.leadership_principles:
-            self.matrix_tree.heading(lp, text=lp, anchor='center')
-            self.matrix_tree.column(lp, width=80, anchor='center')
+        # Load data
+        self.update_lp_matrix_tree()
 
-        # Add scrollbar
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.matrix_tree.yview)
-        self.matrix_tree.configure(yscrollcommand=scrollbar.set)
-
-        # Pack elements using grid
-        self.matrix_tree.grid(row=0, column=0, sticky='nsew')
-        scrollbar.grid(row=0, column=1, sticky='ns')
-
-        parent.grid_rowconfigure(0, weight=1)
-        parent.grid_columnconfigure(0, weight=1)
-
-        # Bind double-click event
-        self.matrix_tree.bind("<Double-1>", self.on_matrix_item_double_click)
-
-        # Update matrix view
-        self.update_matrix_view()
-
-    def update_matrix_view(self):
+    def update_lp_matrix_tree(self):
         # Clear existing items
         for item in self.matrix_tree.get_children():
             self.matrix_tree.delete(item)
 
-        # Add rows
+        # Populate the matrix
         for exp in self.experiences:
             exp_title = exp['title']
-            values = [exp_title]
+            row = [exp_title]
             for lp in self.leadership_principles:
-                if exp_title in self.matrix_data and lp in self.matrix_data[exp_title]:
-                    score = self.matrix_data[exp_title][lp]["score"]
-                    values.append("★" * score)
+                # Check if there is a story for this experience and LP
+                key = f"{exp_title}-{lp}"
+                if key in self.lp_matrix_data:
+                    row.append("✓")
                 else:
-                    values.append("")
-            self.matrix_tree.insert("", "end", values=values)
+                    row.append("")
+            self.matrix_tree.insert('', 'end', values=row)
 
-    def on_matrix_item_double_click(self, event):
+        # Bind double-click event
+        self.matrix_tree.bind("<Double-1>", self.on_lp_matrix_double_click)
+
+    def on_lp_matrix_double_click(self, event):
         item = self.matrix_tree.selection()[0]
         col = self.matrix_tree.identify_column(event.x)
-        col_num = int(col[1:]) - 1
+        col_index = int(col.replace("#", "")) - 1  # Adjust for Treeview indexing
+        if col_index == 0:
+            return  # Ignore if clicked on the Experience column
 
-        if col_num == 0:  # Experience column
-            return
+        exp_title = self.matrix_tree.item(item)['values'][0]
+        lp = self.leadership_principles[col_index - 1]
 
-        experience = self.matrix_tree.item(item)["values"][0]
-        lp = self.leadership_principles[col_num - 1]
+        self.open_lp_story_editor(exp_title, lp)
 
-        self.open_story_editor(experience, lp)
+    def open_lp_story_editor(self, exp_title, lp):
+        # Open a new window to edit the story
+        self.lp_story_window = tk.Toplevel(self.root)
+        self.lp_story_window.title(f"Edit Story - {exp_title} - {lp}")
+        self.lp_story_window.geometry("800x600")
 
-    def open_story_editor(self, experience, lp):
-        # Open a new window for story editing
-        editor_window = tk.Toplevel(self.root)
-        editor_window.title(f"Edit Story - {experience} - {lp}")
-        editor_window.geometry("800x600")
+        ttk.Label(self.lp_story_window, text=f"Experience: {exp_title}", font=('Helvetica', 14)).pack(pady=5)
+        ttk.Label(self.lp_story_window, text=f"Leadership Principle: {lp}", font=('Helvetica', 14)).pack(pady=5)
 
-        ttk.Label(editor_window, text=f"Experience: {experience}", font=('Helvetica', 14)).pack(pady=5)
-        ttk.Label(editor_window, text=f"Leadership Principle: {lp}", font=('Helvetica', 14)).pack(pady=5)
+        # Story Text
+        ttk.Label(self.lp_story_window, text="Story:").pack(anchor='nw', padx=10)
+        self.lp_story_text = scrolledtext.ScrolledText(self.lp_story_window, height=20)
+        self.lp_story_text.pack(fill='both', expand=True, padx=10, pady=5)
 
-        # Score selection
-        score_frame = ttk.Frame(editor_window)
-        score_frame.pack(pady=5)
-        ttk.Label(score_frame, text="Score (1-4):").pack(side='left')
-        score_var = tk.StringVar()
-        score_combo = ttk.Combobox(score_frame, textvariable=score_var, values=['1', '2', '3', '4'])
-        score_combo.pack(side='left', padx=5)
-
-        # Key points
-        ttk.Label(editor_window, text="Key Points (one per line):").pack(anchor='nw')
-        points_text = scrolledtext.ScrolledText(editor_window, height=5)
-        points_text.pack(fill='both', expand=True, pady=2)
-
-        # STAR Story
-        ttk.Label(editor_window, text="STAR Story:").pack(anchor='nw')
-        story_text = scrolledtext.ScrolledText(editor_window, height=10)
-        story_text.pack(fill='both', expand=True, pady=2)
-
-        # Load existing data if any
-        if experience in self.matrix_data and lp in self.matrix_data[experience]:
-            story_data = self.matrix_data[experience][lp]
-            score_var.set(str(story_data["score"]))
-            points_text.insert('1.0', '\n'.join(story_data["points"]))
-            story_text.insert('1.0', story_data["story"])
+        # Load existing story if any
+        key = f"{exp_title}-{lp}"
+        if key in self.lp_matrix_data:
+            self.lp_story_text.insert('1.0', self.lp_matrix_data[key]['story'])
 
         # Buttons
-        button_frame = ttk.Frame(editor_window)
-        button_frame.pack(pady=5)
-        ttk.Button(button_frame, text="Save Story", command=lambda: self.save_story(experience, lp, score_var.get(), points_text.get('1.0', tk.END), story_text.get('1.0', tk.END), editor_window)).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Close", command=editor_window.destroy).pack(side="left", padx=5)
+        button_frame = ttk.Frame(self.lp_story_window)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="Save", command=lambda: self.save_lp_story(exp_title, lp)).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.lp_story_window.destroy).pack(side='left', padx=5)
 
-    def save_story(self, experience, lp, score, points, story, window):
-        points_list = [p.strip() for p in points.strip().split('\n') if p.strip()]
-        story_data = {
-            "points": points_list,
-            "score": int(score or "0"),
-            "story": story.strip()
-        }
+    def save_lp_story(self, exp_title, lp):
+        story_text = self.lp_story_text.get('1.0', tk.END).strip()
+        key = f"{exp_title}-{lp}"
+        self.lp_matrix_data[key] = {'story': story_text}
+        self.save_lp_matrix_data()
+        self.update_lp_matrix_tree()
+        self.lp_story_window.destroy()
+        messagebox.showinfo("Success", "Story saved successfully!")
 
-        if experience not in self.matrix_data:
-            self.matrix_data[experience] = {}
-
-        self.matrix_data[experience][lp] = story_data
-
-        self.save_matrix_data()
-        self.update_matrix_view()
-        messagebox.showinfo("Success", "Story saved successfully!", parent=window)
-
-    def load_matrix_data(self):
+    def load_lp_matrix_data(self):
         try:
             if os.path.exists("lp_matrix_data.json"):
                 with open("lp_matrix_data.json", "r", encoding='utf-8') as f:
-                    return json.load(f)
+                    self.lp_matrix_data = json.load(f)
+                if not isinstance(self.lp_matrix_data, dict):
+                    self.lp_matrix_data = {}
             else:
-                return {}
+                self.lp_matrix_data = {}
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load LP matrix data: {str(e)}")
-            return {}
+            self.lp_matrix_data = {}
 
-    def save_matrix_data(self):
+    def save_lp_matrix_data(self):
         with open("lp_matrix_data.json", "w", encoding='utf-8') as f:
-            json.dump(self.matrix_data, f, ensure_ascii=False, indent=2)
+            json.dump(self.lp_matrix_data, f, ensure_ascii=False, indent=2)
 
     # ----------------------- Interview Framework -----------------------
     def create_interview_framework(self, parent):
@@ -504,12 +535,14 @@ class LPMatrixGUI:
         try:
             if os.path.exists("interview_framework.json"):
                 with open("interview_framework.json", "r", encoding='utf-8') as f:
-                    return json.load(f)
+                    self.interview_framework = json.load(f)
+                if not isinstance(self.interview_framework, dict):
+                    self.interview_framework = {}
             else:
-                return {}
+                self.interview_framework = {}
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load interview framework: {str(e)}")
-            return {}
+            self.interview_framework = {}
 
     def save_framework_data(self):
         with open("interview_framework.json", "w", encoding='utf-8') as f:
@@ -520,21 +553,21 @@ class LPMatrixGUI:
         practice_frame = ttk.Frame(parent)
         practice_frame.pack(expand=True, fill='both', padx=10, pady=10)
 
-        ttk.Label(practice_frame, text="Integrated Practice Mode", font=("Helvetica", 16)).pack(pady=10)
+        ttk.Label(practice_frame, text="Practice", font=("Helvetica", 16)).pack(pady=10)
 
-        # Mode selection
-        mode_frame = ttk.Frame(practice_frame)
-        mode_frame.pack(pady=5)
+        # LP Selection
+        lp_frame = ttk.Frame(practice_frame)
+        lp_frame.pack(pady=5)
 
-        ttk.Label(mode_frame, text="Select Practice Mode:").pack(side='left', padx=5)
-        self.practice_mode_var = tk.StringVar()
-        self.practice_mode_var.set('LP Questions')
-        practice_modes = ['LP Questions', 'Common Questions', 'Integrated']
-        self.practice_mode_combo = ttk.Combobox(mode_frame, textvariable=self.practice_mode_var, values=practice_modes, state='readonly')
-        self.practice_mode_combo.pack(side='left', padx=5)
+        ttk.Label(lp_frame, text="Select Leadership Principle:").pack(side='left', padx=5)
+        self.practice_lp_var = tk.StringVar()
+        lp_options = ['All'] + self.leadership_principles
+        self.practice_lp_var.set('All')
+        self.practice_lp_combo = ttk.Combobox(lp_frame, textvariable=self.practice_lp_var, values=lp_options, state='readonly')
+        self.practice_lp_combo.pack(side='left', padx=5)
 
         # Start Practice Button
-        ttk.Button(mode_frame, text="Start Practice", command=self.start_practice).pack(side='left', padx=5)
+        ttk.Button(lp_frame, text="Start Practice", command=self.start_practice).pack(side='left', padx=5)
 
         # Flashcard Display
         self.flashcard_label = ttk.Label(practice_frame, text="", wraplength=800, font=("Helvetica", 14), justify='center')
@@ -569,106 +602,65 @@ class LPMatrixGUI:
         self.audio_filename = "recording.wav"
 
     def start_practice(self):
-        mode = self.practice_mode_var.get()
-        if mode == 'LP Questions':
-            lp = random.choice(self.leadership_principles)
-            flashcards = self.lp_questions.get(lp, [])
-            if not flashcards:
-                messagebox.showinfo("Info", f"No questions available for {lp}")
-                return
-            self.current_practice_lp = lp
-            # Use spaced repetition to select the next question
-            flashcard = self.select_flashcard(lp, flashcards)
-            self.current_flashcard = flashcard
-        elif mode == 'Common Questions':
-            if not self.common_questions:
-                messagebox.showinfo("Info", "No common questions available.")
-                return
-            # Use spaced repetition to select the next question
-            flashcard = self.select_common_question()
-            self.current_flashcard = flashcard
-        else:  # Integrated mode
-            all_flashcards = []
-            for lp, questions in self.lp_questions.items():
-                for q in questions:
-                    q_copy = q.copy()
-                    q_copy['lp'] = lp
-                    all_flashcards.append(q_copy)
-            for q in self.common_questions:
-                q_copy = q.copy()
-                q_copy['type'] = 'common'
-                all_flashcards.append(q_copy)
-            if not all_flashcards:
-                messagebox.showinfo("Info", "No questions available.")
-                return
-            random.shuffle(all_flashcards)
-            self.current_flashcard = all_flashcards[0]
+        lp_selected = self.practice_lp_var.get()
+        if lp_selected == 'All':
+            questions_pool = self.questions
+        else:
+            questions_pool = [q for q in self.questions if lp_selected in q.get('leadership_principles', [])]
 
+        if not questions_pool:
+            messagebox.showinfo("Info", "No questions available for the selected Leadership Principle.")
+            return
+
+        # Use spaced repetition to select the next question
+        question = self.select_flashcard(questions_pool)
+        self.current_flashcard = question
         self.flashcard_state = 0
         self.update_flashcard_display()
 
-    def select_flashcard(self, lp, flashcards):
+    def select_flashcard(self, questions_pool):
         # Simple spaced repetition implementation
-        history = self.practice_history.get(lp, {})
-        # Sort flashcards by last practiced date
-        flashcards.sort(key=lambda x: history.get(x['id'], 0))
-        return flashcards[0]
-
-    def select_common_question(self):
-        # Simple spaced repetition implementation
-        history = self.practice_history.get('Common Questions', {})
+        history = self.practice_history
         # Assign IDs if not present
-        for idx, q in enumerate(self.common_questions):
+        for idx, q in enumerate(questions_pool):
             if 'id' not in q:
-                q['id'] = f"CQ{idx}"
+                q['id'] = f"Q{idx}"
         # Sort questions by last practiced date
-        self.common_questions.sort(key=lambda x: history.get(x['id'], 0))
-        return self.common_questions[0]
+        questions_pool.sort(key=lambda x: history.get(x['id'], 0))
+        return questions_pool[0]
 
     def next_flashcard_content(self, event):
         if self.current_flashcard is None:
             return
-        self.flashcard_state = (self.flashcard_state + 1) % 2  # For simplicity, only question and answer
+        self.flashcard_state = (self.flashcard_state + 1) % 3  # 0: question, 1: answer, 2: key points
         self.update_flashcard_display()
         if self.flashcard_state == 0:
             # Update practice history
-            if 'lp' in self.current_flashcard:
-                lp = self.current_flashcard['lp']
-                flashcard_id = self.current_flashcard['id']
-            elif 'type' in self.current_flashcard and self.current_flashcard['type'] == 'common':
-                lp = 'Common Questions'
-                flashcard_id = self.current_flashcard['id']
-            else:
-                return
-            self.practice_history.setdefault(lp, {})[flashcard_id] = self.get_current_timestamp()
+            flashcard_id = self.current_flashcard['id']
+            self.practice_history[flashcard_id] = self.get_current_timestamp()
             self.save_practice_history()
 
     def update_flashcard_display(self):
-        mode = self.practice_mode_var.get()
         if self.flashcard_state == 0:
             # Display question
-            if mode == 'LP Questions' or ('lp' in self.current_flashcard):
-                text = f"Leadership Principle: {self.current_practice_lp}\n\nQuestion:\n{self.current_flashcard['question']}\n\n(Press Space to see the answer)"
-            else:
-                text = f"Question:\n{self.current_flashcard['question']}\n\n(Press Space to see the answer)"
+            text = f"Question:\n{self.current_flashcard['question']}\n\n(Press Space to see the answer)"
             self.record_button.config(state='normal')
             self.play_button.config(state='disabled')
-        else:
+        elif self.flashcard_state == 1:
             # Display answer
-            text = f"Answer:\n{self.current_flashcard.get('answer', 'No answer provided.')}\n\n(Press Space for next question)"
+            text = f"Answer:\n{self.current_flashcard.get('answer', 'No answer provided.')}\n\n(Press Space to see key points)"
+            self.record_button.config(state='disabled')
+            self.play_button.config(state='normal')
+        else:
+            # Display key points
+            key_points = '\n'.join(self.current_flashcard.get('key_points', []))
+            text = f"Key Points:\n{key_points}\n\n(Press Space for next question)"
             self.record_button.config(state='disabled')
             self.play_button.config(state='normal')
         self.flashcard_label.config(text=text)
         # Update spaced repetition info
-        if 'lp' in self.current_flashcard:
-            lp = self.current_flashcard['lp']
-            flashcard_id = self.current_flashcard['id']
-        elif 'type' in self.current_flashcard and self.current_flashcard['type'] == 'common':
-            lp = 'Common Questions'
-            flashcard_id = self.current_flashcard['id']
-        else:
-            return
-        last_practiced = self.practice_history.get(lp, {}).get(flashcard_id, None)
+        flashcard_id = self.current_flashcard['id']
+        last_practiced = self.practice_history.get(flashcard_id, None)
         if last_practiced:
             self.spaced_repetition_label.config(text=f"Last practiced on: {last_practiced}")
         else:
@@ -688,7 +680,11 @@ class LPMatrixGUI:
 
     def record_audio(self):
         p = pyaudio.PyAudio()
-        stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=1024)
+        try:
+            stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=1024)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to access microphone: {str(e)}")
+            return
         while self.is_recording:
             data = stream.read(1024)
             self.record_frames.append(data)
@@ -712,8 +708,12 @@ class LPMatrixGUI:
     def play_audio(self):
         wf = wave.open(self.audio_filename, 'rb')
         p = pyaudio.PyAudio()
-        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()), channels=wf.getnchannels(),
-                        rate=wf.getframerate(), output=True)
+        try:
+            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()), channels=wf.getnchannels(),
+                            rate=wf.getframerate(), output=True)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to play audio: {str(e)}")
+            return
         data = wf.readframes(1024)
         while data:
             stream.write(data)
@@ -721,48 +721,6 @@ class LPMatrixGUI:
         stream.stop_stream()
         stream.close()
         p.terminate()
-
-    def load_lp_questions(self):
-        # Sample questions for each leadership principle with answers and key points
-        lp_questions = {
-            "Customer Obsession": [
-                {
-                    "id": "CO1",
-                    "question": "Tell me about a time you went above and beyond for a customer.",
-                    "answer": "In my previous role, I noticed a customer's recurring issue with our software. I proactively reached out, gathered their feedback, and worked with the development team to implement a solution that improved their experience.",
-                    "key_points": [
-                        "Proactive engagement",
-                        "Collaboration with team",
-                        "Improved customer satisfaction"
-                    ]
-                },
-                # Add more questions...
-            ],
-            "Ownership": [
-                {
-                    "id": "OW1",
-                    "question": "Describe a time you took ownership of a project.",
-                    "answer": "When our team leader left unexpectedly, I stepped up to lead the project. I coordinated tasks, communicated with stakeholders, and ensured we met our deadlines successfully.",
-                    "key_points": [
-                        "Stepping up in challenging times",
-                        "Leadership and coordination",
-                        "Successful project delivery"
-                    ]
-                },
-                # Add more questions...
-            ],
-            # Add questions for other leadership principles...
-        }
-        # Ensure all LPs have at least one question
-        for lp in self.leadership_principles:
-            if lp not in lp_questions:
-                lp_questions[lp] = [{
-                    "id": lp.replace(' ', '') + "1",
-                    "question": f"Describe how you embody the '{lp}' principle.",
-                    "answer": "Provide a specific example from your experience.",
-                    "key_points": ["Specific example", "Demonstrate the principle", "Reflect on outcomes"]
-                }]
-        return lp_questions
 
     def get_current_timestamp(self):
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -775,13 +733,15 @@ class LPMatrixGUI:
         try:
             if os.path.exists("practice_history.json"):
                 with open("practice_history.json", "r", encoding='utf-8') as f:
-                    return json.load(f)
-                return {}
+                    self.practice_history = json.load(f)
+                # Ensure practice_history is a dict
+                if not isinstance(self.practice_history, dict):
+                    self.practice_history = {}
             else:
-                return {}
+                self.practice_history = {}
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load practice history: {str(e)}")
-            return {}
+            self.practice_history = {}
 
     # ----------------------- Progress Tracking -----------------------
     def create_progress_tracking(self, parent):
@@ -797,27 +757,15 @@ class LPMatrixGUI:
         tree.pack(fill='both', expand=True)
 
         # Load data
-        for lp, history in self.practice_history.items():
-            for qid, date in history.items():
-                # Find the question text
-                question_text = ''
-                if lp == 'Common Questions':
-                    for q in self.common_questions:
-                        if q.get('id') == qid:
-                            question_text = q['question']
-                            break
-                else:
-                    for q in self.lp_questions.get(lp, []):
-                        if q['id'] == qid:
-                            question_text = q['question']
-                            break
-                tree.insert('', 'end', values=(question_text, date))
+        for q in self.questions:
+            qid = q.get('id')
+            last_practiced = self.practice_history.get(qid, 'Never')
+            tree.insert('', 'end', values=(q['question'], last_practiced))
 
-    # -----------------------------------------------------------------
-
+    # 程序入口
 def main():
     root = tk.Tk()
-    app = LPMatrixGUI(root)
+    app = AmazonInterviewPrep(root)
     root.mainloop()
 
 if __name__ == "__main__":
